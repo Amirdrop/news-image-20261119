@@ -188,7 +188,7 @@ def main():
     hero_baselines = [258 + i * (s + 8) for i, s in enumerate(hero_sizes)]
     for line, bl, s, ls in zip(hero_lines, hero_baselines, hero_sizes, hero_lss):
         draw_text(c, 48, bl - s, line, s, IVORY, "display", letter_spacing=ls)
-    _body(c, 48, 384, "First-ever three-way summit caps Asia trip; lunch in Shenzhen.", 13, MUTED, ls=1)
+    _body(c, 48, 384, "FIRST-EVER THREE-WAY SUMMIT CAPS ASIA TRIP; LUNCH IN SHENZHEN.", 13, MUTED, ls=1)
 
     # right panel
     c.rect(700, 150, 276, 240, RED)
