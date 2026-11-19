@@ -9,134 +9,52 @@ import os
 import struct
 import zlib
 
+from typography import draw_text, measure_text
+from icons import draw_icon
+
 # ---------------------------------------------------------------------------
 # Palette
 # ---------------------------------------------------------------------------
-PAPER = (0x0A, 0x0A, 0x0C)   # near-black
-BANNER = (0xC9, 0xA2, 0x27)  # gold
-HEADLINE = (0xE8, 0xE6, 0xE3)  # off-white
-FACT = (0x9A, 0xA0, 0xA6)   # grey
-NEWSRED = (0x7A, 0x1F, 0x2B)
-NAVY = (0x2B, 0x4C, 0x6F)
+BG = (11, 11, 15)
+CARD = (20, 20, 27)
+LINE = (42, 42, 53)
+IVORY = (242, 239, 230)
+MUTED = (139, 139, 152)
+RED = (255, 61, 0)
+AMBER = (255, 212, 0)
+TEAL = (0, 229, 160)
 
 W = 1024
 H = 1024
 
 
+def fit_size(text, box_w, size, style='display', ls=0):
+    s = size
+    while s > 10 and measure_text(text, s, style, letter_spacing=ls) > box_w * 0.99:
+        s -= 2
+    return s
+
+
 # ---------------------------------------------------------------------------
-# Scalable 5x7 pixel font (ASCII 32..126), bit masks.
-# Each row is one int; bit 4..0 (bit 4 = leftmost column) is a 5px row strip.
-# Row 0 is the top of the glyph.
+# Story facts (kept from SPEC.md)
 # ---------------------------------------------------------------------------
-def _g(*rows):
-    return list(rows)
-
-
-FONT = {
-    ' ': _g(0b00000, 0b00000, 0b00000, 0b00000, 0b00000, 0b00000, 0b00000),
-    '!': _g(0b00100, 0b00100, 0b00100, 0b00100, 0b00100, 0b00000, 0b00100),
-    '"': _g(0b01010, 0b01010, 0b01010, 0b00000, 0b00000, 0b00000, 0b00000),
-    '#': _g(0b01010, 0b11111, 0b01010, 0b01010, 0b11111, 0b01010, 0b00000),
-    '$': _g(0b00100, 0b01110, 0b10101, 0b01110, 0b10101, 0b01110, 0b00100),
-    '%': _g(0b11001, 0b11010, 0b00100, 0b01000, 0b01011, 0b10011, 0b00000),
-    '&': _g(0b01100, 0b10010, 0b10100, 0b01000, 0b10101, 0b10010, 0b01101),
-    "'": _g(0b00100, 0b00100, 0b00100, 0b00000, 0b00000, 0b00000, 0b00000),
-    '(': _g(0b00100, 0b01000, 0b01000, 0b01000, 0b01000, 0b01000, 0b00100),
-    ')': _g(0b00100, 0b00010, 0b00010, 0b00010, 0b00010, 0b00010, 0b00100),
-    '*': _g(0b00000, 0b01010, 0b00100, 0b01110, 0b00100, 0b01010, 0b00000),
-    '+': _g(0b00000, 0b00100, 0b00100, 0b11111, 0b00100, 0b00100, 0b00000),
-    ',': _g(0b00000, 0b00000, 0b00000, 0b00000, 0b00100, 0b00100, 0b01000),
-    '-': _g(0b00000, 0b00000, 0b00000, 0b11111, 0b00000, 0b00000, 0b00000),
-    '.': _g(0b00000, 0b00000, 0b00000, 0b00000, 0b00000, 0b00100, 0b00000),
-    '/': _g(0b00001, 0b00010, 0b00100, 0b00100, 0b01000, 0b10000, 0b00000),
-    '0': _g(0b01110, 0b10001, 0b10011, 0b10101, 0b11001, 0b10001, 0b01110),
-    '1': _g(0b00100, 0b01100, 0b00100, 0b00100, 0b00100, 0b00100, 0b01110),
-    '2': _g(0b01110, 0b10001, 0b00001, 0b00010, 0b00100, 0b01000, 0b11111),
-    '3': _g(0b11111, 0b00010, 0b00100, 0b00010, 0b00001, 0b10001, 0b01110),
-    '4': _g(0b00010, 0b00110, 0b01010, 0b10010, 0b11111, 0b00010, 0b00010),
-    '5': _g(0b11111, 0b10000, 0b11110, 0b00001, 0b00001, 0b10001, 0b01110),
-    '6': _g(0b00110, 0b01000, 0b10000, 0b11110, 0b10001, 0b10001, 0b01110),
-    '7': _g(0b11111, 0b00001, 0b00010, 0b00100, 0b01000, 0b01000, 0b01000),
-    '8': _g(0b01110, 0b10001, 0b10001, 0b01110, 0b10001, 0b10001, 0b01110),
-    '9': _g(0b01110, 0b10001, 0b10001, 0b01111, 0b00001, 0b00010, 0b01100),
-    ':': _g(0b00000, 0b00100, 0b00000, 0b00000, 0b00000, 0b00100, 0b00000),
-    ';': _g(0b00000, 0b00100, 0b00000, 0b00000, 0b00100, 0b00100, 0b01000),
-    '<': _g(0b00010, 0b00100, 0b01000, 0b10000, 0b01000, 0b00100, 0b00010),
-    '=': _g(0b00000, 0b00000, 0b11111, 0b00000, 0b11111, 0b00000, 0b00000),
-    '>': _g(0b01000, 0b00100, 0b00010, 0b00001, 0b00010, 0b00100, 0b01000),
-    '?': _g(0b01110, 0b10001, 0b00001, 0b00010, 0b00100, 0b00000, 0b00100),
-    '@': _g(0b01110, 0b10001, 0b10011, 0b10101, 0b10111, 0b10000, 0b01110),
-    'A': _g(0b01110, 0b10001, 0b10001, 0b11111, 0b10001, 0b10001, 0b10001),
-    'B': _g(0b11110, 0b10001, 0b10001, 0b11110, 0b10001, 0b10001, 0b11110),
-    'C': _g(0b01110, 0b10001, 0b10000, 0b10000, 0b10000, 0b10001, 0b01110),
-    'D': _g(0b11110, 0b10001, 0b10001, 0b10001, 0b10001, 0b10001, 0b11110),
-    'E': _g(0b11111, 0b10000, 0b10000, 0b11110, 0b10000, 0b10000, 0b11111),
-    'F': _g(0b11111, 0b10000, 0b10000, 0b11110, 0b10000, 0b10000, 0b10000),
-    'G': _g(0b01110, 0b10001, 0b10000, 0b10111, 0b10001, 0b10001, 0b01111),
-    'H': _g(0b10001, 0b10001, 0b10001, 0b11111, 0b10001, 0b10001, 0b10001),
-    'I': _g(0b01110, 0b00100, 0b00100, 0b00100, 0b00100, 0b00100, 0b01110),
-    'J': _g(0b00111, 0b00010, 0b00010, 0b00010, 0b00010, 0b10010, 0b01100),
-    'K': _g(0b10001, 0b10010, 0b10100, 0b11000, 0b10100, 0b10010, 0b10001),
-    'L': _g(0b10000, 0b10000, 0b10000, 0b10000, 0b10000, 0b10000, 0b11111),
-    'M': _g(0b10001, 0b11011, 0b10101, 0b10101, 0b10001, 0b10001, 0b10001),
-    'N': _g(0b10001, 0b11001, 0b10101, 0b10011, 0b10001, 0b10001, 0b10001),
-    'O': _g(0b01110, 0b10001, 0b10001, 0b10001, 0b10001, 0b10001, 0b01110),
-    'P': _g(0b11110, 0b10001, 0b10001, 0b11110, 0b10000, 0b10000, 0b10000),
-    'Q': _g(0b01110, 0b10001, 0b10001, 0b10001, 0b10101, 0b10010, 0b01101),
-    'R': _g(0b11110, 0b10001, 0b10001, 0b11110, 0b10100, 0b10010, 0b10001),
-    'S': _g(0b01111, 0b10000, 0b10000, 0b01110, 0b00001, 0b00001, 0b11110),
-    'T': _g(0b11111, 0b00100, 0b00100, 0b00100, 0b00100, 0b00100, 0b00100),
-    'U': _g(0b10001, 0b10001, 0b10001, 0b10001, 0b10001, 0b10001, 0b01110),
-    'V': _g(0b10001, 0b10001, 0b10001, 0b10001, 0b10001, 0b01010, 0b00100),
-    'W': _g(0b10001, 0b10001, 0b10001, 0b10101, 0b10101, 0b11011, 0b10001),
-    'X': _g(0b10001, 0b10001, 0b01010, 0b00100, 0b01010, 0b10001, 0b10001),
-    'Y': _g(0b10001, 0b10001, 0b01010, 0b00100, 0b00100, 0b00100, 0b00100),
-    'Z': _g(0b11111, 0b00001, 0b00010, 0b00100, 0b01000, 0b10000, 0b11111),
-    '[': _g(0b01110, 0b01000, 0b01000, 0b01000, 0b01000, 0b01000, 0b01110),
-    '\\': _g(0b10000, 0b01000, 0b00100, 0b00100, 0b00010, 0b00001, 0b00000),
-    ']': _g(0b01110, 0b00010, 0b00010, 0b00010, 0b00010, 0b00010, 0b01110),
-    '^': _g(0b00100, 0b01010, 0b10001, 0b00000, 0b00000, 0b00000, 0b00000),
-    '_': _g(0b00000, 0b00000, 0b00000, 0b00000, 0b00000, 0b00000, 0b11111),
-    '`': _g(0b01000, 0b00100, 0b00010, 0b00000, 0b00000, 0b00000, 0b00000),
-    'a': _g(0b00000, 0b00000, 0b01110, 0b00001, 0b01111, 0b10001, 0b01111),
-    'b': _g(0b10000, 0b10000, 0b11110, 0b10001, 0b10001, 0b10001, 0b11110),
-    'c': _g(0b00000, 0b00000, 0b01110, 0b10000, 0b10000, 0b10001, 0b01110),
-    'd': _g(0b00001, 0b00001, 0b01111, 0b10001, 0b10001, 0b10001, 0b01111),
-    'e': _g(0b00000, 0b00000, 0b01110, 0b10001, 0b11111, 0b10000, 0b01110),
-    'f': _g(0b00110, 0b01001, 0b01000, 0b11110, 0b01000, 0b01000, 0b01000),
-    'g': _g(0b00000, 0b01111, 0b10001, 0b10001, 0b01111, 0b00001, 0b01110),
-    'h': _g(0b10000, 0b10000, 0b11110, 0b10001, 0b10001, 0b10001, 0b10001),
-    'i': _g(0b00100, 0b00000, 0b01100, 0b00100, 0b00100, 0b00100, 0b01110),
-    'j': _g(0b00010, 0b00000, 0b00110, 0b00010, 0b00010, 0b10010, 0b01100),
-    'k': _g(0b10000, 0b10000, 0b10010, 0b10100, 0b11000, 0b10100, 0b10010),
-    'l': _g(0b01100, 0b00100, 0b00100, 0b00100, 0b00100, 0b00100, 0b01110),
-    'm': _g(0b00000, 0b00000, 0b11010, 0b10101, 0b10101, 0b10101, 0b10001),
-    'n': _g(0b00000, 0b00000, 0b11110, 0b10001, 0b10001, 0b10001, 0b10001),
-    'o': _g(0b00000, 0b00000, 0b01110, 0b10001, 0b10001, 0b10001, 0b01110),
-    'p': _g(0b00000, 0b11110, 0b10001, 0b10001, 0b11110, 0b10000, 0b10000),
-    'q': _g(0b00000, 0b01111, 0b10001, 0b10001, 0b01111, 0b00001, 0b00001),
-    'r': _g(0b00000, 0b00000, 0b10110, 0b11001, 0b10000, 0b10000, 0b10000),
-    's': _g(0b00000, 0b00000, 0b01111, 0b10000, 0b01110, 0b00001, 0b11110),
-    't': _g(0b01000, 0b01000, 0b11110, 0b01000, 0b01000, 0b01001, 0b00110),
-    'u': _g(0b00000, 0b00000, 0b10001, 0b10001, 0b10001, 0b10011, 0b01101),
-    'v': _g(0b00000, 0b00000, 0b10001, 0b10001, 0b10001, 0b01010, 0b00100),
-    'w': _g(0b00000, 0b00000, 0b10001, 0b10001, 0b10101, 0b10101, 0b01010),
-    'x': _g(0b00000, 0b00000, 0b10001, 0b01010, 0b00100, 0b01010, 0b10001),
-    'y': _g(0b00000, 0b10001, 0b10001, 0b10001, 0b01111, 0b00001, 0b01110),
-    'z': _g(0b00000, 0b00000, 0b11111, 0b00010, 0b00100, 0b01000, 0b11111),
-    '{': _g(0b00010, 0b00100, 0b00100, 0b01000, 0b00100, 0b00100, 0b00010),
-    '|': _g(0b00100, 0b00100, 0b00100, 0b00100, 0b00100, 0b00100, 0b00100),
-    '}': _g(0b01000, 0b00100, 0b00100, 0b00010, 0b00100, 0b00100, 0b01000),
-    '~': _g(0b00000, 0b01101, 0b10010, 0b00000, 0b00000, 0b00000, 0b00000),
-}
-
-
-def text_width(text, scale, spacing=None):
-    """Width in pixels of a string at the given scale (5px + gap per char)."""
-    if not text:
-        return 0
-    gap = scale if spacing is None else spacing
-    return len(text) * 5 * scale + (len(text) - 1) * gap
+STORIES = [
+    # (number, category, accent, icon_name, headline, detail)
+    ("02", "MARKETS", AMBER, "tanker",
+     "US STRIKES IRANIAN ISLE", "Tankers ablaze in the Strait of Hormuz"),
+    ("03", "LAW", IVORY, "scales",
+     "ICJ ROHINGYA RULING", "Genocide judgment against Myanmar"),
+    ("04", "WORLD", RED, "strike",
+     "RUSSIAN HITS ON ODESA", "Historic centre struck, four dead"),
+    ("05", "TECH", TEAL, "chip",
+     "NVIDIA HALTS H200", "600k chips stalled in Hong Kong"),
+    ("06", "CLIMATE", TEAL, "cyclone",
+     "CYCLONE AKVAN HITS", "Odisha red zone braces for surge"),
+    ("07", "GAMING", AMBER, "gamepad",
+     "GTA 6 IS OUT", "Launches overnight after 13 years"),
+    ("08", "TECH", RED, "cyber",
+     "JAVA FLAW ALARM", "NSA locks Fort Meade after patch"),
+]
 
 
 # ---------------------------------------------------------------------------
@@ -146,11 +64,22 @@ class Canvas:
     def __init__(self, w, h):
         self.w = w
         self.h = h
-        self.buf = bytearray()
-        for _ in range(w * h):
-            self.buf += bytes(PAPER)
+        self.buf = bytearray(w * h * 3)
 
     def rect(self, x, y, w, h, color):
+        x, y, w, h = int(x), int(y), int(w), int(h)
+        if x < 0:
+            w += x
+            x = 0
+        if y < 0:
+            h += y
+            y = 0
+        if x + w > self.w:
+            w = self.w - x
+        if y + h > self.h:
+            h = self.h - y
+        if w <= 0 or h <= 0:
+            return
         for yy in range(h):
             row = (y + yy) * self.w
             for xx in range(w):
@@ -159,200 +88,19 @@ class Canvas:
                 self.buf[i + 1] = color[1]
                 self.buf[i + 2] = color[2]
 
-    def glyph(self, x, y, ch, scale, color):
-        rows = FONT.get(ch, FONT[' '])
-        for ry, mask in enumerate(rows):
-            for cx in range(5):
-                if mask & (0b10000 >> cx):
-                    self.rect(x + cx * scale, y + ry * scale, scale, scale, color)
 
-    def text(self, x, y, text, scale, color, uppercase=False, spacing=None):
-        if uppercase:
-            text = text.upper()
-        cx = x
-        gap = scale if spacing is None else spacing
-        for ch in text:
-            self.glyph(cx, y, ch, scale, color)
-            cx += 5 * scale + gap
+def _body(c, x, y, t, s, col, ls=0):
+    draw_text(c, x, y, str(t).upper(), s, col, "body", letter_spacing=ls)
 
 
-# ---------------------------------------------------------------------------
-# Icons: each is a function(canvas, x, y, scale) drawing a 16x16 grid glyph
-# (scaled by `scale`).  x,y is the top-left of the 16x16 area.
-# ---------------------------------------------------------------------------
-def _px(c, x, y, scale, dx, dy, color):
-    c.rect(x + dx * scale, y + dy * scale, scale, scale, color)
+def _blit_centered(c, text, size_px, color, style, cx, y):
+    w = measure_text(text, size_px, style)
+    draw_text(c, cx - w / 2.0, y, text, size_px, color, style)
 
 
-def _dot(c, x, y, scale, dx, dy, color):
-    c.rect(x + dx * scale, y + dy * scale, scale, scale, color)
-
-
-def icon_leaders(c, x, y, scale):
-    """Three leader figure silhouettes (head + shoulders)."""
-    # Three figures, each ~4px wide, laid across the 16x16 grid.
-    heads = [(1, 1), (6, 1), (11, 1)]
-    for hx, hy in heads:
-        for dy in range(3):
-            for dx in range(3):
-                _dot(c, x, y, scale, hx + dx, hy + dy, NEWSRED)
-    # shoulders (a broader trapezoid per figure)
-    bodies = [(0, 5), (5, 5), (10, 5)]
-    for bx, by in bodies:
-        for dy in range(5):
-            width = 5 if dy < 1 else (3 if dy < 3 else 2)
-            left = bx + (2 if dy >= 3 else 1 if dy >= 1 else 0)
-            for dx in range(width):
-                _dot(c, x, y, scale, left + dx, by + dy, NEWSRED)
-
-
-def icon_tanker(c, x, y, scale):
-    """Burning tanker silhouette with flames."""
-    # Hull (a long low boat), rows 11..15.
-    for dy in range(5):
-        for dx in range(14):
-            _dot(c, x, y, scale, dx + 1, dy + 10, NAVY)
-    # Superstructure / bridge block.
-    for dy in range(4):
-        for dx in range(5):
-            _dot(c, x, y, scale, dx + 5, dy + 7, NAVY)
-    # Flames rising from the hull.
-    for dx, dy in [(4, 6), (6, 4), (8, 5), (9, 3)]:
-        _dot(c, x, y, scale, dx, dy, NEWSRED)
-
-
-def icon_scales(c, x, y, scale):
-    """Scales of justice: centre pole, crossbeam, two hanging pans."""
-    # Centre pole.
-    for dy in range(12):
-        _dot(c, x, y, scale, 7, dy + 1, NAVY)
-    # Crossbeam.
-    for dx in range(10):
-        _dot(c, x, y, scale, dx + 3, 3, NAVY)
-    # Suspension lines to pans.
-    for dx in range(2):
-        _dot(c, x, y, scale, 4, dy + 4, NAVY)  # covered by crossbeam rows
-    for dx, dy in [(4, 4), (4, 5), (4, 6), (11, 4), (11, 5), (11, 6)]:
-        _dot(c, x, y, scale, dx, dy, NAVY)
-    # Left pan.
-    for dx in range(7):
-        _dot(c, x, y, scale, dx, 7, NAVY)
-        _dot(c, x, y, scale, dx, 8, NAVY)
-    # Right pan.
-    for dx in range(7):
-        _dot(c, x, y, scale, dx + 9, 7, NAVY)
-        _dot(c, x, y, scale, dx + 9, 8, NAVY)
-
-
-def icon_odessa(c, x, y, scale):
-    """Damaged building with blast."""
-    # Main building facade.
-    for dy in range(9):
-        for dx in range(8):
-            _dot(c, x, y, scale, dx + 3, dy + 3, NAVY)
-    # Missing/broken windows (paper-colored holes).
-    for dx, dy in [(4, 4), (6, 4), (8, 4), (5, 6), (9, 6), (7, 8), (5, 8)]:
-        _dot(c, x, y, scale, dx, dy, PAPER)
-    # Blast burst in red near the top.
-    for dx, dy in [(1, 1), (2, 0), (3, 1), (12, 1), (13, 2), (13, 5)]:
-        _dot(c, x, y, scale, dx, dy, NEWSRED)
-
-
-def icon_nvidia(c, x, y, scale):
-    """Chip with eye-like logo."""
-    # Chip body.
-    for dy in range(11):
-        for dx in range(11):
-            _dot(c, x, y, scale, dx + 2, dy + 2, NAVY)
-    # Eye-like logo: a white ring with a dark pupil (the "eye").
-    for dy in range(5):
-        for dx in range(6):
-            if (dx == 0 or dx == 5 or dy == 0 or dy == 4) and not (0 < dx < 5 and 0 < dy < 4):
-                _dot(c, x, y, scale, dx + 4, dy + 4, HEADLINE)
-    _dot(c, x, y, scale, 6, 6, HEADLINE)  # pupil glint
-    # Pins on left and right edges.
-    for dy in range(3):
-        for dx in range(2):
-            _dot(c, x, y, scale, 1, dy + 7, HEADLINE)
-            _dot(c, x, y, scale, 13, dy + 7, HEADLINE)
-
-
-def icon_cyclone(c, x, y, scale):
-    """Spiral cyclone symbol."""
-    # Outer spiral rings (a cyclone eye).
-    ring = [(2, 2), (3, 2), (4, 2), (5, 2), (6, 2),
-            (2, 3), (6, 3), (2, 4), (6, 4), (2, 5), (6, 5),
-            (2, 6), (3, 6), (4, 6), (5, 6), (6, 6)]
-    for dx, dy in ring:
-        _dot(c, x, y, scale, dx + 1, dy + 1, NAVY)
-    # Spiral arm accent in red.
-    for dx, dy in [(3, 3), (5, 4), (4, 5)]:
-        _dot(c, x, y, scale, dx + 1, dy + 1, NEWSRED)
-
-
-def icon_gta(c, x, y, scale):
-    """Gamepad."""
-    # Main body.
-    for dy in range(5):
-        for dx in range(10):
-            _dot(c, x, y, scale, dx + 3, dy + 5, NAVY)
-    # Left / right grips.
-    for dy in range(3):
-        for dx in range(3):
-            _dot(c, x, y, scale, dx + 1, dy + 7, NAVY)
-            _dot(c, x, y, scale, dx + 12, dy + 7, NAVY)
-    # D-pad.
-    for dy in range(3):
-        for dx in range(1):
-            _dot(c, x, y, scale, dx + 6, dy + 6, PAPER)
-    _dot(c, x, y, scale, 5, 7, PAPER)
-    _dot(c, x, y, scale, 7, 7, PAPER)
-    # Face buttons.
-    _dot(c, x, y, scale, 9, 6, PAPER)
-    _dot(c, x, y, scale, 10, 7, PAPER)
-
-
-def icon_cyber(c, x, y, scale):
-    """Padlock with warning."""
-    # Shackle (open at the bottom).
-    for dy in range(4):
-        for dx in range(2):
-            _dot(c, x, y, scale, dx + 4, dy + 3, NEWSRED)
-            _dot(c, x, y, scale, dx + 9, dy + 3, NEWSRED)
-    # Body.
-    for dy in range(6):
-        for dx in range(7):
-            _dot(c, x, y, scale, dx + 4, dy + 7, NEWSRED)
-    # Keyhole.
-    for dy in range(2):
-        for dx in range(1):
-            _dot(c, x, y, scale, dx + 7, dy + 9, PAPER)
-    # Warning exclamation on the body.
-    _dot(c, x, y, scale, 7, 8, PAPER)
-    _dot(c, x, y, scale, 7, 10, PAPER)
-
-
-# ---------------------------------------------------------------------------
-# Story data
-# ---------------------------------------------------------------------------
-STORIES = [
-    ("SHENZHEN SUMMIT", icon_leaders,
-     ["TRUMP-XI-PUTIN MEET", "First-ever 3-power summit", "Shenzhen, APEC - Nov 19"]),
-    ("GULF CRISIS", icon_tanker,
-     ["US STRIKES IRANIAN ISLE", "Tankers ablaze in Hormuz", "Gulf states intercept fire"]),
-    ("WORLD COURT", icon_scales,
-     ["ICJ ROHINGYA RULING", "Genocide case vs Myanmar", "The Hague, Gambia v Myanmar"]),
-    ("ODESA STRUCK", icon_odessa,
-     ["RUSSIAN HITS ON ODESA", "Historic centre struck, 4 dead"]),
-    ("NVIDIA", icon_nvidia,
-     ["NVIDIA HALTS H200", "600k chips stuck in HK", "US closes China chip loophole"]),
-    ("CYCLONE AKVAN", icon_cyclone,
-     ["CYCLONE AKVAN HITS", "Odisha red zone", "India braces for surge"]),
-    ("GTA 6", icon_gta,
-     ["GTA 6 IS OUT", "After a 13-year wait"]),
-    ("CYBER ALERT", icon_cyber,
-     ["JAVA FLAW ALARM", "NSA locks Fort Meade", "Global patch scramble"]),
-]
+def _blit_right(c, text, size_px, color, style, rx, y, ls=0):
+    w = measure_text(text, size_px, style, letter_spacing=ls)
+    draw_text(c, rx - w, y, text, size_px, color, style, letter_spacing=ls)
 
 
 # ---------------------------------------------------------------------------
@@ -387,65 +135,118 @@ def write_png(path, canvas):
 def main():
     c = Canvas(W, H)
 
-    # Banner: top headline, gold, large (scale 4), centered.
-    banner = "THURSDAY 19 NOVEMBER 2026"
-    bs = 4
-    bw = text_width(banner, bs)
-    bx = (W - bw) // 2
-    by = 24
-    c.text(bx, by, banner, bs, BANNER)
+    # -- texture: 1px lines every 64px ------------------------------------
+    for x in range(0, W, 64):
+        c.rect(x, 0, 1, H, (18, 18, 24))
+    for y in range(0, H, 64):
+        c.rect(0, y, W, 1, (18, 18, 24))
 
-    # Subtitle beneath the banner.
-    sub = "THE WORLD IN EIGHT STORIES"
-    ss = 2
-    sw = text_width(sub, ss)
-    sx = (W - sw) // 2
-    c.text(sx, by + 7 * bs + 24, sub, ss, FACT)
+    # -- crop marks (LINE, 24px inset) -------------------------------------
+    cm = 24
+    L = 16
+    for cx, cy, dx, dy in [
+        (cm, cm, 1, 1), (cm, cm, 1, 1),  # top-left
+    ]:
+        pass
+    # top-left
+    c.rect(cm, cm - 1, L, 1, LINE)
+    c.rect(cm - 1, cm, 1, L, LINE)
+    # top-right
+    c.rect(W - cm - L, cm - 1, L, 1, LINE)
+    c.rect(W - cm, cm, 1, L, LINE)
+    # bottom-left
+    c.rect(cm, H - cm, L, 1, LINE)
+    c.rect(cm - 1, H - cm - L, 1, L, LINE)
+    # bottom-right
+    c.rect(W - cm - L, H - cm, L, 1, LINE)
+    c.rect(W - cm, H - cm - L, 1, L, LINE)
 
-    # A gold rule under the subtitle.
-    c.rect(80, by + 7 * bs + 24 + 7 * ss + 14, W - 160, 3, BANNER)
+    # -- masthead -----------------------------------------------------------
+    draw_icon(c, "masthead", 48, 40, 34, [RED, IVORY])
+    draw_text(c, 96, 84 - 46, "WORLD NEWS", 46, IVORY, "display", letter_spacing=2)
+    _blit_right(c, "THU 19 NOV 2026", 15, MUTED, "body", 976, 72 - 15, ls=2)
+    _blit_right(c, "ISSUE 08 / 2026", 11, RED, "body", 976, 92 - 11, ls=2)
+    c.rect(48, 108, 928, 6, RED)
 
-    # Story grid: 2 columns x 4 rows.
-    cols = 2
-    rows = 4
-    margin = 60
-    gap = 30
-    cell_w = (W - 2 * margin - (cols - 1) * gap) // cols
-    cell_h = (H - 260 - (rows - 1) * gap) // rows
+    # -- strap --------------------------------------------------------------
+    draw_text(c, 48, 138 - 12, "THE WORLD IN EIGHT STORIES", 12, AMBER, "body", letter_spacing=3)
+    _blit_right(c, "GLOBAL BRIEF / 01-08", 11, MUTED, "body", 976, 138 - 11)
 
-    icon_scale = 3
-    icon_area = 16 * icon_scale  # 48
+    # -- hero ---------------------------------------------------------------
+    draw_text(c, 48, 150 - 30, "01", 30, RED, "display")
+    c.rect(48, 188, 124, 26, RED)
+    ts_w = measure_text("TOP STORY", 11, "body")
+    draw_text(c, 48 + (124 - ts_w) // 2, 195 - 11, "TOP STORY", 11, BG, "body")
+    hero_lines = ["TRUMP-XI-PUTIN", "SUMMIT OPENS", "IN SHENZHEN"]
+    hero_sizes = [fit_size(line, 620, 52, 'display', 3) for line in hero_lines]
+    hero_baselines = [266 + i * (s + 12) for i, s in enumerate(hero_sizes)]
+    for line, bl, s in zip(hero_lines, hero_baselines, hero_sizes):
+        draw_text(c, 48, bl - s, line, s, IVORY, "display", letter_spacing=3)
+    _body(c, 48, 396 - 13, "First-ever three-way summit caps Asia trip; lunch in Shenzhen.", 13, MUTED, ls=1)
 
-    headline_scale = 2
-    fact_scale = 2
+    # right panel
+    c.rect(700, 150, 276, 240, RED)
+    draw_icon(c, "summit", 726, 180, 224, [BG, IVORY, AMBER])
+    draw_text(c, 724, 380 - 11, "APEC 2026", 11, IVORY, "body")
 
-    top = 260
-    for r in range(rows):
-        for col in range(cols):
-            idx = r * cols + col
-            name, draw_icon, lines = STORIES[idx]
+    # hero hairline
+    c.rect(48, 408, 928, 2, LINE)
 
-            cell_x = margin + col * (cell_w + gap)
-            cell_y = top + r * (cell_h + gap)
+    # -- grid of cards 02-08 ------------------------------------------------
+    colw = 456
+    colh = 120
+    gap = 16
+    gx0 = 48
+    gy0 = 428
+    card_positions = [
+        # (x, y) for cards 02..08
+        (gx0, gy0), (gx0 + colw + gap, gy0),          # row1: 02, 03
+        (gx0, gy0 + colh + gap), (gx0 + colw + gap, gy0 + colh + gap),  # row2: 04, 05
+        (gx0, gy0 + 2 * (colh + gap)), (gx0 + colw + gap, gy0 + 2 * (colh + gap)),  # row3: 06, 07
+        (gx0, gy0 + 3 * (colh + gap)),  # row4 col1: 08
+    ]
+    for idx in range(len(card_positions)):
+        num, cat, accent, icon, headline, detail = STORIES[idx]
+        x, y = card_positions[idx]
+        # card body + border
+        c.rect(x, y, colw, colh, CARD)
+        c.rect(x, y, colw, 2, LINE)
+        c.rect(x, y + colh - 2, colw, 2, LINE)
+        c.rect(x, y, 2, colh, LINE)
+        c.rect(x + colw - 2, y, 2, colh, LINE)
+        # left accent bar (6px)
+        c.rect(x, y, 6, colh, accent)
+        # number
+        draw_text(c, x + 18, y + 42 - 26, num, 26, accent, "display")
+        # icon 50 at x+64,y+34
+        draw_icon(c, icon, x + 64, y + 34, 50, [accent, IVORY, CARD])
+        # chip accent rect 90x18 at x+134,y+22, BG 10px category
+        c.rect(x + 134, y + 22, 90, 18, accent)
+        cat_w = measure_text(cat, 10, "body", letter_spacing=1)
+        draw_text(c, x + 134 + (90 - cat_w) // 2, y + 26, cat, 10, BG, "body", letter_spacing=1)
+        # headline display fitted, top-aligned at y+43 x+134
+        hs = fit_size(headline, 308, 21, 'display', 2)
+        draw_text(c, x + 134, y + 43, headline, hs, IVORY, "display", letter_spacing=2)
+        # detail body fitted, top-aligned at y+43+hs+10
+        ds = fit_size(detail.upper(), 308, 12, 'body', 0)
+        draw_text(c, x + 134, y + 43 + hs + 10, detail.upper(), ds, MUTED, "body")
 
-            # Icon (48x48) at top-left of the cell.
-            draw_icon(c, cell_x, cell_y, icon_scale)
+    # -- special 8th cell (amber accent) ------------------------------------
+    x = gx0 + colw + gap
+    y = gy0 + 3 * (colh + gap)
+    c.rect(x, y, colw, colh, AMBER)
+    c.rect(x, y, colw, 2, (0, 0, 0))
+    c.rect(x, y + colh - 2, colw, 2, (0, 0, 0))
+    c.rect(x, y, 2, colh, (0, 0, 0))
+    c.rect(x + colw - 2, y, 2, colh, (0, 0, 0))
+    draw_text(c, x + 22, y + 92 - 84, "8", 84, BG, "display")
+    draw_text(c, x + 120, y + 54 - 12, "STORIES / 24H", 12, BG, "body")
+    draw_text(c, x + 120, y + 78 - 10, "REPORT 19.11.26", 10, BG, "body")
 
-            # Text block to the right of the icon.
-            tx = cell_x + icon_area + 20
-            ty = cell_y
-
-            # Headline in off-white.
-            c.text(tx, ty, lines[0], headline_scale, HEADLINE)
-            ty += 7 * headline_scale + 14
-
-            # Fact lines in grey.
-            for line in lines[1:]:
-                c.text(tx, ty, line, fact_scale, FACT)
-                ty += 7 * fact_scale + 10
-
-            # thin divider under each block
-            c.rect(cell_x, cell_y + cell_h - 2, cell_w, 2, (0x20, 0x22, 0x26))
+    # -- footer --------------------------------------------------------------
+    c.rect(48, 958, 928, 2, LINE)
+    draw_text(c, 48, 992 - 10, "SOURCES: REUTERS, AP, BLOOMBERG, ICJ", 10, MUTED, "body")
+    _blit_right(c, "MAKE.FUN / NEWS-IMAGE", 10, AMBER, "body", 976, 992 - 10)
 
     # Write output with fallback path.
     path = "/output/entry.png"
@@ -453,7 +254,7 @@ def main():
         os.makedirs("./out", exist_ok=True)
         path = "./out/entry.png"
     write_png(path, c)
-    print("Wrote", path)
+    print("rendered", os.path.getsize(path))
 
 
 def _writable(d):
