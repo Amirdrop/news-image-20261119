@@ -173,16 +173,22 @@ def main():
     _blit_right(c, "GLOBAL BRIEF / 01-08", 11, MUTED, "body", 976, 138 - 11)
 
     # -- hero ---------------------------------------------------------------
-    draw_text(c, 48, 150 - 30, "01", 30, RED, "display")
-    c.rect(48, 188, 124, 26, RED)
+    draw_text(c, 48, 146, "01", 30, RED, "display")
+    c.rect(48, 176, 124, 24, RED)
     ts_w = measure_text("TOP STORY", 11, "body")
-    draw_text(c, 48 + (124 - ts_w) // 2, 195 - 11, "TOP STORY", 11, BG, "body")
+    draw_text(c, 48 + (124 - ts_w) // 2, 181, "TOP STORY", 11, BG, "body")
     hero_lines = ["TRUMP-XI-PUTIN", "SUMMIT OPENS", "IN SHENZHEN"]
-    hero_sizes = [fit_size(line, 620, 52, 'display', 3) for line in hero_lines]
-    hero_baselines = [266 + i * (s + 12) for i, s in enumerate(hero_sizes)]
-    for line, bl, s in zip(hero_lines, hero_baselines, hero_sizes):
-        draw_text(c, 48, bl - s, line, s, IVORY, "display", letter_spacing=3)
-    _body(c, 48, 396 - 13, "First-ever three-way summit caps Asia trip; lunch in Shenzhen.", 13, MUTED, ls=1)
+    hero_sizes = []; hero_lss = []
+    for line in hero_lines:
+        s = fit_size(line, 596, 52, 'display', 4)
+        ls = max(4, int(0.03 * s))
+        s = fit_size(line, 596, 52, 'display', ls)
+        ls = max(4, int(0.03 * s))
+        hero_sizes.append(s); hero_lss.append(ls)
+    hero_baselines = [258 + i * (s + 8) for i, s in enumerate(hero_sizes)]
+    for line, bl, s, ls in zip(hero_lines, hero_baselines, hero_sizes, hero_lss):
+        draw_text(c, 48, bl - s, line, s, IVORY, "display", letter_spacing=ls)
+    _body(c, 48, 384, 'FIRST-EVER THREE-WAY SUMMIT CAPS ASIA TRIP.', 13, MUTED, ls=1)
 
     # right panel
     c.rect(700, 150, 276, 240, RED)

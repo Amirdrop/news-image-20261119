@@ -113,12 +113,6 @@ def measure_text(text, size_px, style='display', letter_spacing=0):
         total += adv
         if i > 0:
             total += letter_spacing
-    # KERN negative pairs
-    if len(text) > 1:
-        for i in range(len(text) - 1):
-            a, b = text[i], text[i + 1]
-            if a in KERN and b in KERN[a]:
-                total -= size_px * 0.10
     return total
 
 
@@ -134,9 +128,6 @@ def draw_text(canvas, x, y, text, size_px, color, style='display', letter_spacin
         cx += adv
         if i < len(text) - 1:
             cx += letter_spacing
-            a, b = text[i], text[i + 1]
-            if a in KERN and b in KERN[a]:
-                cx -= size_px * 0.10
 
 
 def _blit(canvas, x, y, rows, w, cr, cg, cb):
