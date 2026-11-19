@@ -13,18 +13,16 @@ from typography import draw_text, measure_text
 from icons import draw_icon
 
 # ---------------------------------------------------------------------------
-# Palette (light cream newspaper)
+# Palette
 # ---------------------------------------------------------------------------
-PAPER = (0xF6, 0xF1, 0xE7)
-INK = (0x14, 0x12, 0x10)
-RED = (0xC8, 0x10, 0x2E)
-BLUE = (0x1B, 0x4B, 0x8F)
-YELLOW = (0xF5, 0xC4, 0x00)
-# muted greys for secondary text (light paper needs dark-ish grey)
-GREY = (0x6B, 0x63, 0x58)
-GREY_LIGHT = (0x8C, 0x84, 0x78)
-MUTED = GREY
-RULE = (0x3A, 0x34, 0x2E)
+BG = (11, 11, 15)
+CARD = (20, 20, 27)
+LINE = (42, 42, 53)
+IVORY = (242, 239, 230)
+MUTED = (139, 139, 152)
+RED = (255, 61, 0)
+AMBER = (255, 212, 0)
+TEAL = (0, 229, 160)
 
 W = 1024
 H = 1024
@@ -42,17 +40,17 @@ def fit_size(text, box_w, size, style='display', ls=0):
 # ---------------------------------------------------------------------------
 STORIES = [
     # (number, category, accent, icon_name, headline, detail)
-    ("02", "MARKETS", RED, "tanker",
+    ("02", "MARKETS", AMBER, "tanker",
      "US STRIKES IRANIAN ISLE", "Tankers ablaze in the Strait of Hormuz"),
-    ("03", "LAW", BLUE, "scales",
+    ("03", "LAW", IVORY, "scales",
      "ICJ ROHINGYA RULING", "Genocide judgment against Myanmar"),
     ("04", "WORLD", RED, "strike",
      "RUSSIAN HITS ON ODESA", "Historic centre struck, four dead"),
-    ("05", "TECH", BLUE, "chip",
+    ("05", "TECH", TEAL, "chip",
      "NVIDIA HALTS H200", "600k chips stalled in Hong Kong"),
-    ("06", "CLIMATE", RED, "cyclone",
+    ("06", "CLIMATE", TEAL, "cyclone",
      "CYCLONE AKVAN HITS", "Odisha red zone braces for surge"),
-    ("07", "GAMING", BLUE, "gamepad",
+    ("07", "GAMING", AMBER, "gamepad",
      "GTA 6 IS OUT", "Launches overnight after 13 years"),
     ("08", "TECH", RED, "cyber",
      "JAVA FLAW ALARM", "NSA locks Fort Meade after patch"),
@@ -105,11 +103,6 @@ def _blit_right(c, text, size_px, color, style, rx, y, ls=0):
     draw_text(c, rx - w, y, text, size_px, color, style, letter_spacing=ls)
 
 
-def _blit_centered_ls(c, text, size_px, color, style, cx, y, ls=0):
-    w = measure_text(text, size_px, style, letter_spacing=ls)
-    draw_text(c, cx - w / 2.0, y, text, size_px, color, style, letter_spacing=ls)
-
-
 # ---------------------------------------------------------------------------
 # PNG writer
 # ---------------------------------------------------------------------------
@@ -141,117 +134,125 @@ def write_png(path, canvas):
 # ---------------------------------------------------------------------------
 def main():
     c = Canvas(W, H)
-    c.rect(0, 0, W, H, PAPER)
 
-    M = 48
-    CW = W - 2 * M          # content width
+    # -- texture: 1px lines every 64px ------------------------------------
+    for x in range(0, W, 64):
+        c.rect(x, 0, 1, H, (18, 18, 24))
+    for y in range(0, H, 64):
+        c.rect(0, y, W, 1, (18, 18, 24))
 
-    # -- masthead -------------------------------------------------------------
-    _blit_centered_ls(c, "THE WORLD IN ONE DAY", 20, RED, "body", W / 2, 24, ls=3)
-    # thin double rule above
-    c.rect(M, 50, CW, 1, RULE)
-    c.rect(M, 54, CW, 1, RULE)
-    # huge centred auto-fit display headline
-    hsize = fit_size("THURSDAY 19 NOVEMBER 2026", CW - 40, 74, 'display', 2)
-    hs_ls = 2
-    hsize = fit_size("THURSDAY 19 NOVEMBER 2026", CW - 40, 74, 'display', hs_ls)
-    _blit_centered_ls(c, "THURSDAY 19 NOVEMBER 2026", hsize, INK, "display", W / 2, 64, ls=hs_ls)
-    # thin double rule below
-    c.rect(M, 64 + hsize + 20, CW, 1, RULE)
-    c.rect(M, 64 + hsize + 24, CW, 1, RULE)
+    # -- crop marks (LINE, 24px inset) -------------------------------------
+    cm = 24
+    L = 16
+    for cx, cy, dx, dy in [
+        (cm, cm, 1, 1), (cm, cm, 1, 1),  # top-left
+    ]:
+        pass
+    # top-left
+    c.rect(cm, cm - 1, L, 1, LINE)
+    c.rect(cm - 1, cm, 1, L, LINE)
+    # top-right
+    c.rect(W - cm - L, cm - 1, L, 1, LINE)
+    c.rect(W - cm, cm, 1, L, LINE)
+    # bottom-left
+    c.rect(cm, H - cm, L, 1, LINE)
+    c.rect(cm - 1, H - cm - L, 1, L, LINE)
+    # bottom-right
+    c.rect(W - cm - L, H - cm, L, 1, LINE)
+    c.rect(W - cm, H - cm - L, 1, L, LINE)
 
-    # -- deck line ------------------------------------------------------------
-    deck_y = 64 + hsize + 34
-    deck = "TRUMP-XI-PUTIN SUMMIT OPENS  ·  US STRIKES IRANIAN ISLE  ·  ICJ ROHINGYA RULING"
-    _blit_centered(c, deck, 14, INK, "body", W / 2, deck_y)
-    c.rect(M, deck_y + 34, CW, 2, RULE)
+    # -- masthead -----------------------------------------------------------
+    draw_icon(c, "masthead", 48, 40, 34, [RED, IVORY])
+    draw_text(c, 96, 84 - 46, "WORLD NEWS", 46, IVORY, "display", letter_spacing=2)
+    _blit_right(c, "THU 19 NOV 2026", 15, MUTED, "body", 976, 72 - 15, ls=2)
+    _blit_right(c, "ISSUE 08 / 2026", 11, RED, "body", 976, 92 - 11, ls=2)
+    c.rect(48, 108, 928, 6, RED)
 
-    # -- region ribbon --------------------------------------------------------
-    rib_y = deck_y + 42
-    regions = [
-        ("CHINA", "SUMMIT"),
-        ("GULF", "STRIKE"),
-        ("THE HAGUE", "ICJ"),
-        ("ODESA", "WAR"),
-        ("HONG KONG", "CHIPS"),
-        ("ODISHA", "CYCLONE"),
-        ("WORLDWIDE", "GTA 6"),
-    ]
-    total = 7
-    c.rect(M, rib_y, CW, 30, INK)
-    step = CW / float(total)
-    for i, (name, count) in enumerate(regions):
-        cx = M + i * step + step / 2
-        _blit_centered(c, name + " " + count, 11, PAPER, "body", cx, rib_y + 16)
+    # -- strap --------------------------------------------------------------
+    draw_text(c, 48, 138 - 12, "THE WORLD IN EIGHT STORIES", 12, AMBER, "body", letter_spacing=3)
+    _blit_right(c, "GLOBAL BRIEF / 01-08", 11, MUTED, "body", 976, 138 - 11)
 
-    # -- stats band -----------------------------------------------------------
-    stats_y = rib_y + 40
-    stats = [
-        ("81.3BN", "IPO RAISED"),
-        ("15.9M", "GTA 6 PRE-ORDERS"),
-        ("200,000", "EVACUATED"),
-        ("730,000", "ROHINGYA"),
-        ("16BN", "VOYAGER 1 MILES"),
-    ]
-    n = len(stats)
-    c.rect(M, stats_y, CW, 58, (0xEF, 0xE9, 0xDB))
-    c.rect(M, stats_y, CW, 1, RULE)
-    c.rect(M, stats_y + 57, CW, 1, RULE)
-    step = CW / float(n)
-    for i, (num, cap) in enumerate(stats):
-        cx = M + i * step + step / 2
-        _blit_centered(c, num, 24, RED, "display", cx, stats_y + 6)
-        _blit_centered(c, cap, 9, GREY, "body", cx, stats_y + 40)
-
-    # -- placeholder story grid (kept from old layout, temporary) -------------
-    gy0 = stats_y + 76
-    colw = 456
-    colh = 118
-    gap = 16
-    gx0 = M
-    card_positions = [
-        (gx0, gy0), (gx0 + colw + gap, gy0),
-        (gx0, gy0 + colh + gap), (gx0 + colw + gap, gy0 + colh + gap),
-        (gx0, gy0 + 2 * (colh + gap)), (gx0 + colw + gap, gy0 + 2 * (colh + gap)),
-        (gx0, gy0 + 3 * (colh + gap)),
-    ]
-    for idx in range(len(card_positions)):
-        num, cat, accent, icon, headline, detail = STORIES[idx]
-        x, y = card_positions[idx]
-        c.rect(x, y, colw, colh, (0xEE, 0xE8, 0xDA))
-        c.rect(x, y, colw, 1, RULE)
-        c.rect(x, y + colh - 1, colw, 1, RULE)
-        c.rect(x, y, 1, colh, RULE)
-        c.rect(x + colw - 1, y, 1, colh, RULE)
-        c.rect(x, y, 6, colh, accent)
-        draw_text(c, x + 16, y + 30 - 26, num, 26, accent, "display")
-        draw_icon(c, icon, x + 62, y + 34, 50, [accent, INK, PAPER])
-        c.rect(x + 130, y + 22, 90, 16, accent)
-        cat_w = measure_text(cat, 9, "body", letter_spacing=1)
-        draw_text(c, x + 130 + (90 - cat_w) // 2, y + 25, cat, 9, PAPER, "body", letter_spacing=1)
-        hs = fit_size(headline, 308, 20, 'display', 2)
-        draw_text(c, x + 130, y + 42, headline, hs, INK, "display", letter_spacing=2)
-        ds = fit_size(detail.upper(), 308, 11, 'body', 0)
-        draw_text(c, x + 130, y + 42 + hs + 8, detail.upper(), ds, GREY, "body")
-
-    # -- hero block ------------------------------------------------------------
-    draw_text(c, 48, 146, "01", 26, RED, "display")
+    # -- hero ---------------------------------------------------------------
+    draw_text(c, 48, 146, "01", 30, RED, "display")
     c.rect(48, 176, 124, 24, RED)
-    _body(c, 48, 181, "TOP STORY", 9, PAPER, ls=1)
+    ts_w = measure_text("TOP STORY", 11, "body")
+    draw_text(c, 48 + (124 - ts_w) // 2, 181, "TOP STORY", 11, BG, "body")
     hero_lines = ["TRUMP-XI-PUTIN", "SUMMIT OPENS", "IN SHENZHEN"]
-    for i, line in enumerate(hero_lines):
+    hero_sizes = []; hero_lss = []
+    for line in hero_lines:
         s = fit_size(line, 596, 52, 'display', 4)
         ls = max(4, int(0.03 * s))
         s = fit_size(line, 596, 52, 'display', ls)
         ls = max(4, int(0.03 * s))
-        draw_text(c, 48, (258 + i * (s + 8)) - s, line, s, INK, "display", letter_spacing=ls)
-    _body(c, 48, 384, "FIRST-EVER THREE-WAY SUMMIT CAPS ASIA TRIP.", 13, MUTED, ls=1)
+        hero_sizes.append(s); hero_lss.append(ls)
+    hero_baselines = [258 + i * (s + 8) for i, s in enumerate(hero_sizes)]
+    for line, bl, s, ls in zip(hero_lines, hero_baselines, hero_sizes, hero_lss):
+        draw_text(c, 48, bl - s, line, s, IVORY, "display", letter_spacing=ls)
+    _body(c, 48, 384, "First-ever three-way summit caps Asia trip; lunch in Shenzhen.", 13, MUTED, ls=1)
 
-    # -- footer ----------------------------------------------------------------
-    fy = 992
-    c.rect(M, 972, CW, 2, RULE)
-    draw_text(c, M, fy - 10, "SOURCES: REUTERS, AP, BLOOMBERG, ICJ", 10, GREY, "body")
-    _blit_right(c, "MAKE.FUN / NEWS-IMAGE", 10, RED, "body", W - M, fy - 10)
+    # right panel
+    c.rect(700, 150, 276, 240, RED)
+    draw_icon(c, "summit", 726, 180, 224, [BG, IVORY, AMBER])
+    draw_text(c, 724, 380 - 11, "APEC 2026", 11, IVORY, "body")
+
+    # hero hairline
+    c.rect(48, 408, 928, 2, LINE)
+
+    # -- grid of cards 02-08 ------------------------------------------------
+    colw = 456
+    colh = 120
+    gap = 16
+    gx0 = 48
+    gy0 = 428
+    card_positions = [
+        # (x, y) for cards 02..08
+        (gx0, gy0), (gx0 + colw + gap, gy0),          # row1: 02, 03
+        (gx0, gy0 + colh + gap), (gx0 + colw + gap, gy0 + colh + gap),  # row2: 04, 05
+        (gx0, gy0 + 2 * (colh + gap)), (gx0 + colw + gap, gy0 + 2 * (colh + gap)),  # row3: 06, 07
+        (gx0, gy0 + 3 * (colh + gap)),  # row4 col1: 08
+    ]
+    for idx in range(len(card_positions)):
+        num, cat, accent, icon, headline, detail = STORIES[idx]
+        x, y = card_positions[idx]
+        # card body + border
+        c.rect(x, y, colw, colh, CARD)
+        c.rect(x, y, colw, 2, LINE)
+        c.rect(x, y + colh - 2, colw, 2, LINE)
+        c.rect(x, y, 2, colh, LINE)
+        c.rect(x + colw - 2, y, 2, colh, LINE)
+        # left accent bar (6px)
+        c.rect(x, y, 6, colh, accent)
+        # number
+        draw_text(c, x + 18, y + 42 - 26, num, 26, accent, "display")
+        # icon 50 at x+64,y+34
+        draw_icon(c, icon, x + 64, y + 34, 50, [accent, IVORY, CARD])
+        # chip accent rect 90x18 at x+134,y+22, BG 10px category
+        c.rect(x + 134, y + 22, 90, 18, accent)
+        cat_w = measure_text(cat, 10, "body", letter_spacing=1)
+        draw_text(c, x + 134 + (90 - cat_w) // 2, y + 26, cat, 10, BG, "body", letter_spacing=1)
+        # headline display fitted, top-aligned at y+43 x+134
+        hs = fit_size(headline, 308, 21, 'display', 2)
+        draw_text(c, x + 134, y + 43, headline, hs, IVORY, "display", letter_spacing=2)
+        # detail body fitted, top-aligned at y+43+hs+10
+        ds = fit_size(detail.upper(), 308, 12, 'body', 0)
+        draw_text(c, x + 134, y + 43 + hs + 10, detail.upper(), ds, MUTED, "body")
+
+    # -- special 8th cell (amber accent) ------------------------------------
+    x = gx0 + colw + gap
+    y = gy0 + 3 * (colh + gap)
+    c.rect(x, y, colw, colh, AMBER)
+    c.rect(x, y, colw, 2, (0, 0, 0))
+    c.rect(x, y + colh - 2, colw, 2, (0, 0, 0))
+    c.rect(x, y, 2, colh, (0, 0, 0))
+    c.rect(x + colw - 2, y, 2, colh, (0, 0, 0))
+    draw_text(c, x + 22, y + 92 - 84, "8", 84, BG, "display")
+    draw_text(c, x + 120, y + 54 - 12, "STORIES / 24H", 12, BG, "body")
+    draw_text(c, x + 120, y + 78 - 10, "REPORT 19.11.26", 10, BG, "body")
+
+    # -- footer --------------------------------------------------------------
+    c.rect(48, 958, 928, 2, LINE)
+    draw_text(c, 48, 992 - 10, "SOURCES: REUTERS, AP, BLOOMBERG, ICJ", 10, MUTED, "body")
+    _blit_right(c, "MAKE.FUN / NEWS-IMAGE", 10, AMBER, "body", 976, 992 - 10)
 
     # Write output with fallback path.
     path = "/output/entry.png"
